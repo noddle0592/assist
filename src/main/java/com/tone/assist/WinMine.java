@@ -13,20 +13,23 @@ import com.tone.lib.string.Pads;
 import javax.swing.*;
 import java.awt.*;
 
-import static com.tone.assist.WinUserH.*;
+import static com.tone.assist.WindowsH.*;
 
-public class WinMineAssist extends JFrame {
+public class WinMine extends JFrame {
     private static final byte MINE_END = 0x10; // 一行雷结束了的结束符
     private static final byte MINE = -113; // 0x8F代表雷
+    private static final byte RATIO = 100; // 系统缩放比例
     private int height; // 雷区高度
     private byte[] byteArray; // 雷区列表
 
-    public WinMineAssist() throws HeadlessException {
+    public WinMine() throws HeadlessException {
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        this.setTitle("扫雷助手");
 
         JLabel label = new JLabel("雷区：");
         this.getContentPane().add(label, BorderLayout.WEST);
         JTextArea textArea = new JTextArea();
+        textArea.setEditable(false);
         this.getContentPane().add(textArea, BorderLayout.CENTER);
         JPanel panel = new JPanel(new GridLayout(6, 1, 2, 5));
         JButton btnRead = new JButton("读取");
@@ -80,22 +83,23 @@ public class WinMineAssist extends JFrame {
                 for (int i = 0; i < height; i++) {
                     // y坐标要在x坐标后边。由于这里使用的是字节的高位对应数字的高位
                     // 发现一个很奇怪的问题，x和y的坐标全部被缩小到了80%。原因未知，所以这边给他放大
-                    xyPosition[1] = (short) ((baseY + step * i) / 0.8);
+                    // 坐标缩小80%的原因找到了，是因为笔记本系统中的缩放与布局调整到了125%
+                    xyPosition[1] = (short) ((baseY + step * i) * RATIO / 100);
                     for (int j = 0; j < 32; j++) {
                         byte b = byteArray[i * 32 + j];
                         if (b == MINE_END) {
                             break;
                         } else if (b != MINE){
                             // 不是雷才点击
-                            xyPosition[0] = (short) ((baseX + step * j) / 0.8);
-                            /*xyPosition[0] = (short)0;
-                            xyPosition[1] = (short)100;*/
+                            xyPosition[0] = (short) ((baseX + step * j) * RATIO / 100);
+                            /*xyPosition[0] = (short)20;
+                            xyPosition[1] = (short)60;*/
                             WinDef.LPARAM lParam = new WinDef.LPARAM(Numbers.short2Int(xyPosition));
                             // 这里用PostMessage和SendMessage都可以.只是PostMessage是非阻塞的，而SendMessage是阻塞的
                             User32.INSTANCE.PostMessage(hWnd, WM_LBUTTONDOWN, wParam, lParam);
                             User32.INSTANCE.PostMessage(hWnd, WM_LBUTTONUP, wParam, lParam);
 //                            User32.INSTANCE.SendMessage(hWnd, WM_LBUTTONUP, wParam1, lParam);
-//                            System.out.println("发送消息 " + j + " : " +  xyPosition[0] + ", " + i + " : " + xyPosition[1] + ", b = " + b + ", param = " + param);
+//                            System.out.println("发送消息 x = " + j + " : " +  xyPosition[0] + ", y = " + i + " : " + xyPosition[1]);
                         }
                     }
                 }
@@ -159,7 +163,7 @@ public class WinMineAssist extends JFrame {
             Kernel32.INSTANCE.ReadProcessMemory(handle, pointer, bufPointer, 8, null);
 //            int width = bufPointer.getInt(0); // 宽度可以不需要，因为一行读取到0x10就算结束了。这样也就是知道宽度了
             height = bufPointer.getInt(4);
-            if (height > 24) {
+            if (height <= 0 || height > 24) {
                 JOptionPane.showMessageDialog(this, "读取宽高信息出错，读取的高度为" + height);
                 return null;
             }
@@ -172,29 +176,16 @@ public class WinMineAssist extends JFrame {
         return hWnd;
     }
 
-    /**
-     * 创建并显示GUI。出于线程安全的考虑，
-     * 这个方法在事件调用线程中调用。
-     */
-    private static void createAndShowGUI() {
-        // 确保一个漂亮的外观风格
-//        JFrame.setDefaultLookAndFeelDecorated(true);
-
-        // 创建及设置窗口
-        WinMineAssist frame = new WinMineAssist();
-
-        frame.setSize(800, 600);
-
-        // 显示窗口
-//        frame.pack();
-        frame.setVisible(true);
-    }
-
     public static void main(String[] args) {
-        // 显示应用 GUI
+        // 显示应用GUI
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
-                createAndShowGUI();
+                // 创建及设置窗口
+                WinMine frame = new WinMine();
+                frame.setSize(800, 600);
+                frame.setLocation(400, 100);
+                // 显示窗口
+                frame.setVisible(true);
             }
         });
     }

@@ -3,7 +3,7 @@ package com.tone.assist;
 /**
  * Winuser.h文件里面定义的按键值
  */
-public interface WinUserH {
+public interface WindowsH {
     int WM_COMMAND = 0x111; // 菜单被按下的消息
 
     int WM_MOUSEFIRST = 0x0200;
