@@ -2,10 +2,7 @@ package com.tone.assist;
 
 import com.sun.jna.Memory;
 import com.sun.jna.Pointer;
-import com.sun.jna.platform.win32.Kernel32;
-import com.sun.jna.platform.win32.User32;
-import com.sun.jna.platform.win32.WinDef;
-import com.sun.jna.platform.win32.WinNT;
+import com.sun.jna.platform.win32.*;
 import com.sun.jna.ptr.IntByReference;
 import com.tone.lib.number.Numbers;
 import com.tone.lib.string.Pads;
@@ -18,7 +15,7 @@ import static com.tone.assist.WindowsH.*;
 public class WinMine extends JFrame {
     private static final byte MINE_END = 0x10; // 一行雷结束了的结束符
     private static final byte MINE = -113; // 0x8F代表雷
-    private static final byte RATIO = 100; // 系统缩放比例
+    private byte ratio; // 系统缩放比例
     private int height; // 雷区高度
     private byte[] byteArray; // 雷区列表
 
@@ -84,14 +81,14 @@ public class WinMine extends JFrame {
                     // y坐标要在x坐标后边。由于这里使用的是字节的高位对应数字的高位
                     // 发现一个很奇怪的问题，x和y的坐标全部被缩小到了80%。原因未知，所以这边给他放大
                     // 坐标缩小80%的原因找到了，是因为笔记本系统中的缩放与布局调整到了125%
-                    xyPosition[1] = (short) ((baseY + step * i) * RATIO / 100);
+                    xyPosition[1] = (short) ((baseY + step * i) * ratio / 100);
                     for (int j = 0; j < 32; j++) {
                         byte b = byteArray[i * 32 + j];
                         if (b == MINE_END) {
                             break;
                         } else if (b != MINE){
                             // 不是雷才点击
-                            xyPosition[0] = (short) ((baseX + step * j) * RATIO / 100);
+                            xyPosition[0] = (short) ((baseX + step * j) * ratio / 100);
                             /*xyPosition[0] = (short)20;
                             xyPosition[1] = (short)60;*/
                             WinDef.LPARAM lParam = new WinDef.LPARAM(Numbers.short2Int(xyPosition));
@@ -129,6 +126,40 @@ public class WinMine extends JFrame {
         panel.add(btnMiddle);
         panel.add(btnHigh);
         this.getContentPane().add(panel, BorderLayout.EAST);
+        // 获取系统缩放比例
+        ratio = (byte) this.getWindowScale();
+    }
+
+    /**
+     * 获取win10的DPI设置，并转换为scale
+     * @return 返回scale值。100代表未缩放，125表示放大1.25倍，其余类推
+     */
+    private int getWindowScale() {
+        // DPI默认96
+        int dpi = 96;
+        String regPath = "Control Panel\\Desktop\\WindowMetrics";
+        String regValue = "AppliedDPI";
+        // 这里也可以直接使用Advapi32Util.registryGetIntValue(WinReg.HKEY_CURRENT_USER, regPath, regValue, 0)简化获取dpi的步骤
+        WinReg.HKEYByReference phkKey = new WinReg.HKEYByReference();
+        int rc = Advapi32.INSTANCE.RegOpenKeyEx(WinReg.HKEY_CURRENT_USER, regPath, 0, WinNT.KEY_READ, phkKey);
+        if (rc == W32Errors.ERROR_SUCCESS) {
+            IntByReference lpcbData = new IntByReference();
+            IntByReference lpType = new IntByReference();
+            rc = Advapi32.INSTANCE.RegQueryValueEx(phkKey.getValue(), regValue, 0,
+                    lpType, (char[]) null, lpcbData);
+            if ((rc == W32Errors.ERROR_SUCCESS || rc == W32Errors.ERROR_INSUFFICIENT_BUFFER)
+                    && lpType.getValue() == WinNT.REG_DWORD) {
+                IntByReference data = new IntByReference();
+                rc = Advapi32.INSTANCE.RegQueryValueEx(phkKey.getValue(), regValue, 0,
+                        lpType, data, lpcbData);
+                if (rc == W32Errors.ERROR_SUCCESS
+                        || rc == W32Errors.ERROR_INSUFFICIENT_BUFFER) {
+                    dpi = data.getValue();
+                }
+            }
+            Advapi32.INSTANCE.RegCloseKey(phkKey.getValue());
+        }
+        return dpi * 100 / 96;
     }
 
     private void sendWmCommand(int menuId) {
